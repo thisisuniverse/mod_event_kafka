@@ -1,7 +1,7 @@
 # Customise these as appropriate
 MODNAME = mod_event_kafka.so
 MODOBJ = mod_event_kafka.o
-MODCFLAGS = -Wall -Werror 
+MODCFLAGS = -Wall
 MODLDFLAGS = -lssl 
 
 CXX = g++
