@@ -43,6 +43,8 @@ namespace mod_event_kafka {
     static switch_xml_config_item_t instructions[] = {
         SWITCH_CONFIG_ITEM("bootstrap-servers", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.brokers,
                             "localhost:9092", NULL, "bootstrap-servers", "Kafka Bootstrap Brokers"),
+        SWITCH_CONFIG_ITEM("username", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.username, "", NULL, "username", "Username"),
+        SWITCH_CONFIG_ITEM("password", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.password, "", NULL, "password", "Password"),
         SWITCH_CONFIG_ITEM("topic-prefix", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.topic_prefix,
                             "fs", NULL, "topic-prefix", "Kafka Topic Prefix"),
         SWITCH_CONFIG_ITEM("buffer-size", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.buffer_size,
@@ -89,6 +91,22 @@ namespace mod_event_kafka {
 
             if (rd_kafka_conf_set(conf, "compression.codec", "snappy", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            }
+            
+            if (rd_kafka_conf_set(conf, "sasl.mechanism", "plain", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            }
+            
+            if (rd_kafka_conf_set(conf, "security.protocol", "sasl_plaintext", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            }
+            
+            if (rd_kafka_conf_set(conf, "sasl.username", globals.username, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            }
+            
+            if (rd_kafka_conf_set(conf, "sasl.password", globals.password, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
 
             rd_kafka_conf_set_dr_msg_cb(conf, dr_msg_cb);
