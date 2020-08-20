@@ -116,7 +116,7 @@ namespace mod_event_kafka {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create new producer: %s \n", errstr);
             }
 
-            std::string topic_str = std::string(globals.topic));
+            std::string topic_str = std::string(globals.topic);
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "KafkaEventPublisher Topic : %s \n", topic_str.c_str());
 
             rd_kafka_topic_conf_t *tconf = rd_kafka_topic_conf_new();
