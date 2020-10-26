@@ -3,5 +3,6 @@
 		<param name="bootstrap-servers" value="localhost:9092"/>
 		<param name="topic-prefix" value="topic_name"/>
 		<param name="buffer-size" value="16" /> 
+		<param name="max-retry" value="0" /> 
 	</settings>
  </configuration>

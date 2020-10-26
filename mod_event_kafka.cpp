@@ -35,6 +35,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
 #include <switch.h>
 #include "mod_event_kafka.hpp"
 
@@ -49,6 +50,8 @@ namespace mod_event_kafka {
                             "fs", NULL, "topic", "Kafka Topic"),
         SWITCH_CONFIG_ITEM("buffer-size", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.buffer_size,
                             10, NULL, "buffer-size", "queue.buffering.max.messages"),
+        SWITCH_CONFIG_ITEM("max-retry", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.max_retry,
+                            3, NULL, "max-retry", "Queue full retry count"),
         SWITCH_CONFIG_ITEM_END()
     };
 
@@ -127,17 +130,17 @@ namespace mod_event_kafka {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create topic %s object: %s \n", topic_str.c_str(),  rd_kafka_err2str(rd_kafka_last_error()));
             }
 
-            _initialized = 1;
+            _initialized = true;
         }
 
         void PublishEvent(switch_event_t *event) {
 
-            char *uuid = switch_event_get_header(event, "Channel-Call-UUID");
-            char *event_json = (char*)malloc(sizeof(char));
-            switch_event_serialize_json(event, &event_json);
+            std::string uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
+            std::vector<char*> event_json{};
+            switch_event_serialize_json(event, event_json.data());
 
             if(_initialized){
-                int resp = send(event_json, uuid ,0);
+                int resp = send(event_json.front(), uuid, globals.max_retry);
                 if (resp == -1){
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to produce, with error %s \n", rd_kafka_err2str(rd_kafka_last_error()));
                 } else {
@@ -146,9 +149,7 @@ namespace mod_event_kafka {
                 }
                 rd_kafka_poll(producer, 0);
             } else {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "PublishEvent without active KafkaPublisher\n %s \n",event_json);
-                delete uuid;
-                delete event_json;
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "PublishEvent without active KafkaPublisher\n %s \n", event_json);
             }
         }
 
@@ -175,50 +176,54 @@ namespace mod_event_kafka {
             }
         }
 
-        int send(char *data, char *key, int currentCount){
-            if(++currentCount <= max_retry_limit){
-                int key_length = key == NULL ? 0 : strlen(key);
-                int result = rd_kafka_produce(topic, RD_KAFKA_PARTITION_UA,
-                            RD_KAFKA_MSG_F_FREE /* Auto Clear Payload */,
-                            (void *)data, strlen(data),
-                            (const void *)key, key_length,
-                            /* Message opaque, provided in
-                             * delivery report callback as
-                             * msg_opaque. */
-                            NULL);
+        int send(char *data, const std::string &key, int limit) {
 
-                auto last_error = rd_kafka_last_error();
-                if(result == 0){
+            if (limit == 0 && ++limit <= globals.max_retry)
+            {
+                const int result = rd_kafka_produce(
+                    topic,
+                    RD_KAFKA_PARTITION_UA,
+                    RD_KAFKA_MSG_F_FREE /* Auto Clear Payload */,
+                    (void *)data,
+                    strlen(data),
+                    (const void *)key.c_str(),
+                    key.length(),
+                    /* Message opaque, provided in delivery report callback as msg_opaque. */
+                    NULL);
+
+                if (result == 0)
                     return result;
-                } else if(last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL) {
+
+                const auto last_error = rd_kafka_last_error();
+
+                //not handing other unknown errors
+                if (last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL)
+                {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"queue.buffering.max.messages limit reached, waiting 1sec to flush out.\n");
-                    std::thread([this, data, currentCount, key]() { 
+                    std::thread([this, data, limit, &key]() { 
                         //localqueue is full, hold and flush them.
                         rd_kafka_poll(producer, 1000/*block for max 1000ms*/);
-                        send(data, key, currentCount); 
+                        send(data, key, limit); 
                     })
                     .detach(); //TODO: limit number of forked threads
-                    return result;
-                } else {
-                    //not handing other unknown errors
-                    return result;
                 }
+
+                return result;
+
             } else {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "KafkaEventPublisher send max_retry_limit hit.\n");
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "%s\n",data);
-                // delete data; //TODO: Doesn't work, throws segment fault.
-                // delete key;
             }
+
             return 0;    
         }   
 
-        int max_retry_limit = 3;
-        bool _initialized = 0;
+        bool _initialized{};
 
         rd_kafka_t *producer;    
         rd_kafka_topic_t *topic;  
         rd_kafka_conf_t *conf; 
-        char errstr[512]; 
+        char errstr[512];
        
     };
 
@@ -293,7 +298,6 @@ namespace mod_event_kafka {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Kafka Event module\n");
                 return SWITCH_STATUS_GENERR;
             }
-
     }
 
 
