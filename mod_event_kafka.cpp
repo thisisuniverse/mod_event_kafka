@@ -178,7 +178,7 @@ namespace mod_event_kafka {
 
         int send(char *data, const std::string &key, int limit) {
 
-            if (limit == 0 && ++limit <= globals.max_retry)
+            if (globals.max_retry == 0 || ++limit <= globals.max_retry)
             {
                 const int result = rd_kafka_produce(
                     topic,
