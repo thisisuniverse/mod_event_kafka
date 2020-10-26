@@ -25,7 +25,7 @@
  * Anthony Minessale II <anthm@freeswitch.org>
  *
  * Contributor(s):
- * 
+ *
  * Kinshuk Bairagi <me@kinshuk.in>
  *
  * mod_event_kafka.c -- Sends FreeSWITCH events to an Kafka broker
@@ -35,9 +35,19 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include <vector>
+#include <cstdlib>
 #include <switch.h>
 #include "mod_event_kafka.hpp"
+
+namespace {
+
+    template <typename T, std::size_t Muliplier = 1>
+    T* malloc_new()
+    {
+        return static_cast<T*>(std::malloc(sizeof(T) * Muliplier));
+    }
+
+}
 
 namespace mod_event_kafka {
 
@@ -70,14 +80,14 @@ namespace mod_event_kafka {
 
     class KafkaEventPublisher {
 
-        
+
         public:
         KafkaEventPublisher(){
 
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "KafkaEventPublisher Initialising...");
 
             load_config(SWITCH_FALSE);
-            
+
             conf = rd_kafka_conf_new();
 
             if (rd_kafka_conf_set(conf, "metadata.broker.list", globals.brokers, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
@@ -95,19 +105,19 @@ namespace mod_event_kafka {
             if (rd_kafka_conf_set(conf, "compression.codec", "snappy", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
-            
+
             if (rd_kafka_conf_set(conf, "sasl.mechanism", "PLAIN", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
-            
+
             if (rd_kafka_conf_set(conf, "security.protocol", "SASL_PLAINTEXT", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
-            
+
             if (rd_kafka_conf_set(conf, "sasl.username", globals.username, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
-            
+
             if (rd_kafka_conf_set(conf, "sasl.password", globals.password, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
             }
@@ -136,11 +146,11 @@ namespace mod_event_kafka {
         void PublishEvent(switch_event_t *event) {
 
             std::string uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
-            std::vector<char*> event_json{};
-            switch_event_serialize_json(event, event_json.data());
+            char *event_json = malloc_new<char*>();
+            switch_event_serialize_json(event, &event_json);
 
             if(_initialized){
-                int resp = send(event_json.front(), uuid, globals.max_retry);
+                const int resp = send(event_json, uuid, globals.max_retry);
                 if (resp == -1){
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to produce, with error %s \n", rd_kafka_err2str(rd_kafka_last_error()));
                 } else {
@@ -151,6 +161,9 @@ namespace mod_event_kafka {
             } else {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "PublishEvent without active KafkaPublisher\n %s \n", event_json);
             }
+
+            std::free(event_json);
+
         }
 
         void Shutdown(){
@@ -200,10 +213,10 @@ namespace mod_event_kafka {
                 if (last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL)
                 {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"queue.buffering.max.messages limit reached, waiting 1sec to flush out.\n");
-                    std::thread([this, data, limit, &key]() { 
+                    std::thread([this, data, limit, &key]() {
                         //localqueue is full, hold and flush them.
                         rd_kafka_poll(producer, 1000/*block for max 1000ms*/);
-                        send(data, key, limit); 
+                        send(data, key, limit);
                     })
                     .detach(); //TODO: limit number of forked threads
                 }
@@ -215,23 +228,23 @@ namespace mod_event_kafka {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "%s\n",data);
             }
 
-            return 0;    
-        }   
+            return 0;
+        }
 
         bool _initialized{};
 
-        rd_kafka_t *producer;    
-        rd_kafka_topic_t *topic;  
-        rd_kafka_conf_t *conf; 
+        rd_kafka_t *producer;
+        rd_kafka_topic_t *topic;
+        rd_kafka_conf_t *conf;
         char errstr[512];
-       
+
     };
 
     class KafkaModule {
     public:
 
         KafkaModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool): _publisher() {
-             
+
             // Subscribe to all switch events of any subclass
             // Store a pointer to ourself in the user data
             if (switch_event_bind_removable(modname, SWITCH_EVENT_ALL, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
@@ -292,7 +305,7 @@ namespace mod_event_kafka {
     //*****************************//
     SWITCH_MODULE_LOAD_FUNCTION(mod_event_kafka_load) {
             try {
-                module.reset(new KafkaModule(module_interface, pool));
+                module = std::make_unique<KafkaModule>(module_interface, pool);
                 return SWITCH_STATUS_SUCCESS;
             } catch(...) { // Exceptions must not propogate to C caller
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Kafka Event module\n");
@@ -317,4 +330,3 @@ namespace mod_event_kafka {
     }
 
 }
-
