@@ -153,8 +153,9 @@ namespace mod_event_kafka {
                 uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
             } catch(std::exception &ex) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Exception detected in switch_event_get_header() : %s\n", ex.what());
+                return;
             } catch(...) { // Exceptions must not propogate to C caller
-
+                return;
             }
 
             if (uuid.length() != UUID_LENGTH)
