@@ -1,7 +1,7 @@
 #ifndef MOD_EVENT_KAFKA_H
 #define MOD_EVENT_KAFKA_H
 
-extern "C" { 
+extern "C" {
 	#include "librdkafka/rdkafka.h"
 }
 
@@ -13,6 +13,7 @@ namespace mod_event_kafka {
 		char *username;
 		char *password;
 		int buffer_size;
+		int max_retry;
 	} globals;
 
 	SWITCH_MODULE_LOAD_FUNCTION(mod_event_kafka_load);
