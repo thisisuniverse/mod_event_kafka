@@ -82,7 +82,6 @@ namespace mod_event_kafka {
 
     class KafkaEventPublisher {
 
-
         public:
         KafkaEventPublisher(){
 
@@ -152,7 +151,6 @@ namespace mod_event_kafka {
             try {
                 uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
             } catch(std::exception &ex) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Exception detected in switch_event_get_header() : %s\n", ex.what());
                 return;
             } catch(...) { // Exceptions must not propogate to C caller
                 return;
@@ -173,7 +171,6 @@ namespace mod_event_kafka {
             }
 
             if (_initialized) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Invoking send()");
                 const int resp = send(event_json, uuid.c_str(), globals.max_retry);
                 if (resp == -1){
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to produce, with error %s \n", rd_kafka_err2str(rd_kafka_last_error()));
@@ -215,7 +212,6 @@ namespace mod_event_kafka {
 
             if (globals.max_retry == 0 || ++limit <= globals.max_retry)
             {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Invoking rd_kafka_produce()");
                 const int key_length = key == NULL ? 0 : strlen(key);
                 const int result = rd_kafka_produce(
                     topic,
