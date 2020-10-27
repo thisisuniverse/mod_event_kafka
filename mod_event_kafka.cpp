@@ -41,6 +41,8 @@
 
 namespace {
 
+    constexpr std::size_t UUID_LENGTH = 36;
+
     template <typename T, std::size_t Muliplier = 1>
     T* malloc_new()
     {
@@ -146,6 +148,10 @@ namespace mod_event_kafka {
         void PublishEvent(switch_event_t *event) {
 
             std::string uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
+
+            if (uuid.length() != UUID_LENGTH)
+                return;
+
             char *event_json = malloc_new<char>();
 
             const switch_status_t json_status = switch_event_serialize_json(event, &event_json);
