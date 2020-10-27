@@ -230,7 +230,7 @@ namespace mod_event_kafka {
                 const auto last_error = rd_kafka_last_error();
 
                 //not handing other unknown errors
-                if (last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL)
+                if (globals.max_retry != 0 && last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL)
                 {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"queue.buffering.max.messages limit reached, waiting 1sec to flush out.\n");
                     std::thread([this, data, limit, key]() {
