@@ -150,7 +150,8 @@ namespace mod_event_kafka {
             switch_event_serialize_json(event, &event_json);
 
             if(_initialized){
-                const int resp = send(event_json, uuid, globals.max_retry);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Invoking send()");
+                const int resp = send(event_json, uuid.c_str(), globals.max_retry);
                 if (resp == -1){
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to produce, with error %s \n", rd_kafka_err2str(rd_kafka_last_error()));
                 } else {
@@ -187,18 +188,20 @@ namespace mod_event_kafka {
             }
         }
 
-        int send(char *data, const std::string &key, int limit) {
+        int send(char *data, char *key, int limit) {
 
             if (globals.max_retry == 0 || ++limit <= globals.max_retry)
             {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Invoking rd_kafka_produce()");
+                const int key_length = key == NULL ? 0 : strlen(key);
                 const int result = rd_kafka_produce(
                     topic,
                     RD_KAFKA_PARTITION_UA,
                     RD_KAFKA_MSG_F_FREE /* Auto Clear Payload */,
                     (void *)data,
                     strlen(data),
-                    (const void *)key.c_str(),
-                    key.length(),
+                    (const void *)key,
+                    key_length,
                     /* Message opaque, provided in delivery report callback as msg_opaque. */
                     NULL);
 
@@ -211,7 +214,7 @@ namespace mod_event_kafka {
                 if (last_error == RD_KAFKA_RESP_ERR__QUEUE_FULL)
                 {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"queue.buffering.max.messages limit reached, waiting 1sec to flush out.\n");
-                    std::thread([this, data, limit, &key]() {
+                    std::thread([this, data, limit, key]() {
                         //localqueue is full, hold and flush them.
                         rd_kafka_poll(producer, 1000/*block for max 1000ms*/);
                         send(data, key, limit);
@@ -280,7 +283,7 @@ namespace mod_event_kafka {
                 publisher->PublishEvent(event);
             } catch (std::exception ex) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event to Kafka: %s\n",
-                                  ex.what());
+                                  ex.what();
             } catch (...) { // Exceptions must not propogate to C caller
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event to Kafka\n");
             }
