@@ -147,9 +147,17 @@ namespace mod_event_kafka {
 
             std::string uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
             char *event_json = malloc_new<char>();
-            switch_event_serialize_json(event, &event_json);
 
-            if(_initialized){
+            const switch_status_t json_status = switch_event_serialize_json(event, &event_json);
+
+            if (json_status == SWITCH_STATUS_FALSE)
+            {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "json serialization failed in switch\n");
+                std::free(event_json);
+                return;
+            }
+
+            if (_initialized) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Invoking send()");
                 const int resp = send(event_json, uuid.c_str(), globals.max_retry);
                 if (resp == -1){
@@ -282,8 +290,7 @@ namespace mod_event_kafka {
                 KafkaEventPublisher *publisher = static_cast<KafkaEventPublisher*>(event->bind_user_data);
                 publisher->PublishEvent(event);
             } catch (std::exception ex) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event to Kafka: %s\n",
-                                  ex.what();
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event to Kafka: %s\n", ex.what());
             } catch (...) { // Exceptions must not propogate to C caller
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event to Kafka\n");
             }
