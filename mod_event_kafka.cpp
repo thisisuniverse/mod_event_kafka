@@ -146,7 +146,7 @@ namespace mod_event_kafka {
         void PublishEvent(switch_event_t *event) {
 
             std::string uuid = std::string(switch_event_get_header(event, "Channel-Call-UUID"));
-            char *event_json = malloc_new<char*>();
+            char *event_json = malloc_new<char>();
             switch_event_serialize_json(event, &event_json);
 
             if(_initialized){
@@ -160,10 +160,8 @@ namespace mod_event_kafka {
                 rd_kafka_poll(producer, 0);
             } else {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "PublishEvent without active KafkaPublisher\n %s \n", event_json);
+                std::free(event_json);
             }
-
-            std::free(event_json);
-
         }
 
         void Shutdown(){
