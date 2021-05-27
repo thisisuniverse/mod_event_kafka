@@ -2,11 +2,11 @@
 MODNAME = mod_event_kafka.so
 MODOBJ = mod_event_kafka.o
 MODCFLAGS = -Wall
-MODLDFLAGS = -lssl 
+MODLDFLAGS = -lssl
 
 CXX = g++
-CXXFLAGS = -fPIC -g -ggdb -I/usr/include  `pkg-config --cflags freeswitch` $(MODCFLAGS) -std=c++0x
-LDFLAGS = `pkg-config --libs freeswitch` -lrdkafka -lz -lpthread -lrt $(MODLDFLAGS) 
+CXXFLAGS = -fPIC -g -ggdb -I/usr/include  `pkg-config --cflags freeswitch` $(MODCFLAGS) -std=c++20 -O3 -flto
+LDFLAGS = `pkg-config --libs freeswitch` -lrdkafka -lz -lpthread -lrt $(MODLDFLAGS)
 
 .PHONY: all
 all: $(MODNAME)
