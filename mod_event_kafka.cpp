@@ -32,6 +32,7 @@
  *
  */
 
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -69,76 +70,87 @@ namespace mod_event_kafka {
 
     static switch_status_t load_config(switch_bool_t reload)
     {
-        memset(&globals, 0, sizeof(globals));
-        if (switch_xml_config_parse_module_settings("event_kafka.conf", reload, instructions) != SWITCH_STATUS_SUCCESS) {
+        std::memset(&globals, 0, sizeof(globals));
+
+        const auto result = switch_xml_config_parse_module_settings("event_kafka.conf", reload, instructions);
+
+        if (result != SWITCH_STATUS_SUCCESS)
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Could not open event_kafka.conf\n");
-            return SWITCH_STATUS_FALSE;
-        } else {
+        else
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "event_kafka.conf loaded [brokers: %s, topic: %s, buffer-size: %d]", globals.brokers, globals.topic, globals.buffer_size);
-        }
-        return SWITCH_STATUS_SUCCESS;
+
+        return result;
     }
 
+    struct KafkaEventPublisher {
 
-    class KafkaEventPublisher {
-
-        public:
-        KafkaEventPublisher(){
+        KafkaEventPublisher() {
 
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "KafkaEventPublisher Initialising...");
 
             load_config(SWITCH_FALSE);
 
-            conf = rd_kafka_conf_new();
+            auto *conf = rd_kafka_conf_new();
 
-            if (rd_kafka_conf_set(conf, "metadata.broker.list", globals.brokers, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            std::string errstr(512, '\0');
+            constexpr std::size_t errsize = sizeof(errstr.data());
+
+            if (rd_kafka_conf_set(conf, "metadata.broker.list", globals.brokers, &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "queue.buffering.max.messages", std::to_string(globals.buffer_size).c_str(), errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "queue.buffering.max.messages", std::to_string(globals.buffer_size).data(), &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "max.in.flight", "1000", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "max.in.flight", "1000", &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "compression.codec", "snappy", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "compression.codec", "snappy", &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "sasl.mechanism", "PLAIN", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "sasl.mechanism", "PLAIN", &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "security.protocol", "SASL_PLAINTEXT", errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "security.protocol", "SASL_PLAINTEXT", &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "sasl.username", globals.username, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "sasl.username", globals.username, &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
-            if (rd_kafka_conf_set(conf, "sasl.password", globals.password, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr);
+            if (rd_kafka_conf_set(conf, "sasl.password", globals.password, &errstr[0], errsize) != RD_KAFKA_CONF_OK) {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, errstr.data());
             }
 
             rd_kafka_conf_set_dr_msg_cb(conf, dr_msg_cb);
 
-            producer = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr));
+            producer = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr.data(), errsize);
+
             if (!producer) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create new producer: %s \n", errstr);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create new producer: %s \n", errstr.data());
             }
 
-            std::string topic_str = std::string(globals.topic);
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "KafkaEventPublisher Topic : %s \n", topic_str.c_str());
+            auto topic_str = std::string(globals.topic);
 
-            rd_kafka_topic_conf_t *tconf = rd_kafka_topic_conf_new();
-            rd_kafka_topic_conf_set(tconf, "message.timeout.ms", "30000", NULL, 0);
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "KafkaEventPublisher Topic : %s \n", topic_str.data());
 
-            topic = rd_kafka_topic_new(producer, topic_str.c_str(), NULL);
+            auto *tconf = rd_kafka_topic_conf_new();
+
+            const auto topic_config_set = rd_kafka_topic_conf_set(tconf, "message.timeout.ms", "30000", NULL, 0);
+
+            if (topic_config_set != RD_KAFKA_CONF_OK) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to apply kafka topic configuration\n");
+            }
+
+            topic = rd_kafka_topic_new(producer, topic_str.data(), NULL);
+
             if (!topic) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create topic %s object: %s \n", topic_str.c_str(),  rd_kafka_err2str(rd_kafka_last_error()));
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to create topic %s object: %s \n", topic_str.data(),  rd_kafka_err2str(rd_kafka_last_error()));
             }
 
             _initialized = true;
@@ -171,7 +183,7 @@ namespace mod_event_kafka {
             }
 
             if (_initialized) {
-                const int resp = send(event_json, uuid.c_str(), globals.max_retry);
+                const auto resp = send(event_json, uuid.data(), globals.max_retry);
                 if (resp == -1){
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to produce, with error %s \n", rd_kafka_err2str(rd_kafka_last_error()));
                 } else {
@@ -201,8 +213,7 @@ namespace mod_event_kafka {
         static void dr_msg_cb (rd_kafka_t *rk, const rd_kafka_message_t *rkmessage, void *opaque) {
             if (rkmessage->err) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, " Message delivery failed %s \n",rd_kafka_err2str(rkmessage->err));
-            }
-            else {
+            } else {
                 //switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,  "Message delivered (%zd bytes, partition %d, offset  %" PRId64 ") \n",rkmessage->len, rkmessage->partition, rkmessage->offset);
                 // rd_kafka_message_destroy ((rd_kafka_message_t *)rkmessage);
             }
@@ -213,7 +224,7 @@ namespace mod_event_kafka {
             if (globals.max_retry == 0 || ++limit <= globals.max_retry)
             {
                 const int key_length = key == NULL ? 0 : strlen(key);
-                const int result = rd_kafka_produce(
+                const auto result = rd_kafka_produce(
                     topic,
                     RD_KAFKA_PARTITION_UA,
                     RD_KAFKA_MSG_F_FREE /* Auto Clear Payload */,
@@ -253,15 +264,12 @@ namespace mod_event_kafka {
 
         bool _initialized{};
 
-        rd_kafka_t *producer;
-        rd_kafka_topic_t *topic;
-        rd_kafka_conf_t *conf;
-        char errstr[512];
+        rd_kafka_t *producer{};
+        rd_kafka_topic_t *topic{};
 
     };
 
-    class KafkaModule {
-    public:
+    struct KafkaModule {
 
         KafkaModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool): _publisher() {
 
@@ -300,7 +308,7 @@ namespace mod_event_kafka {
             try {
                 KafkaEventPublisher *publisher = static_cast<KafkaEventPublisher*>(event->bind_user_data);
                 publisher->PublishEvent(event);
-            } catch (std::exception ex) {
+            } catch (std::exception &ex) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event to Kafka: %s\n", ex.what());
             } catch (...) { // Exceptions must not propogate to C caller
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event to Kafka\n");
