@@ -210,12 +210,12 @@ namespace mod_event_kafka {
 
         private:
 
-        static void dr_msg_cb (rd_kafka_t *rk, const rd_kafka_message_t *rkmessage, void *opaque) {
+        static void dr_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmessage, void *opaque) {
             if (rkmessage->err) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, " Message delivery failed %s \n",rd_kafka_err2str(rkmessage->err));
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Message delivery failed %s \n",rd_kafka_err2str(rkmessage->err));
             } else {
                 //switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,  "Message delivered (%zd bytes, partition %d, offset  %" PRId64 ") \n",rkmessage->len, rkmessage->partition, rkmessage->offset);
-                // rd_kafka_message_destroy ((rd_kafka_message_t *)rkmessage);
+                rd_kafka_message_destroy((rd_kafka_message_t *)rkmessage);
             }
         }
 
